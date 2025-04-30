@@ -14,29 +14,58 @@
         h1 {
             color: #333;
         }
-        .tour-list {
-            margin-top: 20px;
+        .search-bar {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: flex-end;
         }
-        .tour-item {
-            background-color: #fff;
-            padding: 10px;
-            margin: 10px 0;
+        .search-bar input {
+            padding: 8px;
+            width: 200px;
             border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        .tour-item button {
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .action-btns {
+            display: flex;
+            justify-content: space-between;
+        }
+        .action-btns button {
             background-color: #e74c3c;
             color: white;
-            border: none;
             padding: 5px 10px;
+            border: none;
             cursor: pointer;
             border-radius: 3px;
         }
-        .tour-item button:hover {
+        .action-btns button:hover {
             background-color: #c0392b;
         }
-        .tour-item .details {
-            margin-top: 10px;
+        .no-tours {
+            text-align: center;
+            font-size: 18px;
+            color: #e74c3c;
         }
     </style>
 </head>
@@ -44,54 +73,75 @@
 
     <h1>Gestión de Tours</h1>
 
-    <div id="tour-list" class="tour-list">
-        <!-- Los tours se cargarán aquí dinámicamente -->
+    <!-- Barra de búsqueda -->
+    <div class="search-bar">
+        <input type="text" id="search-input" placeholder="Buscar tours..." oninput="filterTours()">
+    </div>
+
+    <!-- Tabla para mostrar los tours -->
+    <div id="tour-list">
+        <!-- La tabla de tours se cargará aquí dinámicamente -->
     </div>
 
     <script>
         // URL de la API
         const apiUrl = 'http://localhost:8000/api/tours'; // Cambiar según sea necesario
+        let tours = []; // Almacenaremos los tours en esta variable
 
         // Función para obtener y mostrar los tours
         async function fetchTours() {
             try {
                 const response = await fetch(apiUrl);
-                const tours = await response.json();
-
-                if (Array.isArray(tours) && tours.length > 0) {
-                    displayTours(tours);
-                } else {
-                    document.getElementById('tour-list').innerHTML = '<p>No hay tours disponibles.</p>';
-                }
+                tours = await response.json(); // Guardamos los tours recibidos
+                displayTours(tours);
             } catch (error) {
                 console.error('Error al obtener tours:', error);
-                document.getElementById('tour-list').innerHTML = '<p>Hubo un error al cargar los tours.</p>';
+                document.getElementById('tour-list').innerHTML = '<p class="no-tours">Hubo un error al cargar los tours.</p>';
             }
         }
 
-        // Función para mostrar los tours en la página
+        // Función para mostrar los tours en una tabla
         function displayTours(tours) {
             const tourListElement = document.getElementById('tour-list');
-            tourListElement.innerHTML = ''; // Limpiar la lista existente
+            if (tours.length === 0) {
+                tourListElement.innerHTML = '<p class="no-tours">No hay tours disponibles.</p>';
+                return;
+            }
+
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Descripción</th>
+                            <th>Precio</th>
+                            <th>Duración</th>
+                            <th>Fecha de Inicio</th>
+                            <th>Destino</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
 
             tours.forEach(tour => {
-                const tourItem = document.createElement('div');
-                tourItem.classList.add('tour-item');
-
-                tourItem.innerHTML = `
-                    <h3>${tour.nombreto}</h3>
-                    <p><strong>Descripción:</strong> ${tour.descripcion}</p>
-                    <p><strong>Precio:</strong> $${tour.precio}</p>
-                    <p><strong>Duración:</strong> ${tour.duracion} días</p>
-                    <p><strong>Fecha de inicio:</strong> ${tour.fecha_inicio}</p>
-                    <p><strong>Destino:</strong> ${tour.destino}</p>
-                    <div class="details">
-                        <button onclick="deleteTour(${tour.id_tour})">Eliminar</button>
-                    </div>
+                tableHTML += `
+                    <tr>
+                        <td>${tour.nombreto}</td>
+                        <td>${tour.descripcion}</td>
+                        <td>$${tour.precio}</td>
+                        <td>${tour.duracion} días</td>
+                        <td>${tour.fecha_inicio}</td>
+                        <td>${tour.destino}</td>
+                        <td class="action-btns">
+                            <button onclick="deleteTour(${tour.id_tour})">Eliminar</button>
+                        </td>
+                    </tr>
                 `;
-
-                tourListElement.appendChild(tourItem);
             });
+
+            tableHTML += '</tbody></table>';
+            tourListElement.innerHTML = tableHTML;
         }
 
         // Función para eliminar un tour
@@ -120,6 +170,16 @@
                     alert('Hubo un error al eliminar el tour.');
                 }
             }
+        }
+
+        // Función para filtrar tours por nombre o destino
+        function filterTours() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filteredTours = tours.filter(tour => 
+                tour.nombreto.toLowerCase().includes(query) || 
+                tour.destino.toLowerCase().includes(query)
+            );
+            displayTours(filteredTours);
         }
 
         // Cargar los tours cuando se cargue la página
