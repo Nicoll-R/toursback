@@ -2,91 +2,139 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Tour;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class TourController extends Controller
 {
-            /**
-     * Display a listing of the resource.
+    /**
+     * Devuelve una lista de todos los tours.
      */
     public function index()
     {
-        return response()->json(Tour::all());
+        $tours = Tour::all();
+
+        if ($tours->isEmpty()) {
+            return response()->json(['message' => 'No hay tours disponibles'], 204);
+        }
+
+        return response()->json($tours, 200);
     }
 
     /**
-     * Display the specified resource.
+     * Muestra los detalles de un tour específico.
      */
     public function show($id_tour)
     {
         $tour = Tour::where('id_tour', $id_tour)->first();
 
-        if ($tour) {
-            return response()->json($tour);
-        } else {
+        if (!$tour) {
             return response()->json(['message' => 'Tour no encontrado'], 404);
+        }
+
+        return response()->json($tour, 200);
+    }
+
+    /**
+     * Crea un nuevo tour en la base de datos.
+     */
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->all(), $this->validationRules());
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $tour = Tour::create($request->only([
+                'nombreto', 'descripcion', 'precio',
+                'duracion', 'fecha_inicio', 'destino'
+            ]));
+
+            return response()->json([
+                'message' => 'Tour creado exitosamente',
+                'data' => $tour
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Error al crear tour: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al guardar el tour'], 500);
         }
     }
 
     /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        $request->validate([
-            'nombreto' => 'required|string|max:255',
-            'descripcion' => 'required|string|max:255',
-            'precio' => 'required|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'duracion' => 'required|integer',
-            'fecha_inicio' => 'required|date_format:Y-m-d',
-            'destino' => 'required|string|max:255',
-        ]);
-
-        $tour = Tour::create($request->only(['nombreto', 'descripcion', 'precio', 'duracion', 'fecha_inicio', 'destino']));
-
-        return response()->json($tour, 201);
-    }
-
-    /**
-     * Update the specified resource in storage.
+     * Actualiza un tour existente.
      */
     public function update(Request $request, $id_tour)
     {
         $tour = Tour::where('id_tour', $id_tour)->first();
 
-        if ($tour) {
-            $request->validate([
-                'nombreto' => 'required|string|max:255',
-                'descripcion' => 'required|string|max:255',
-                'precio' => 'required|regex:/^\d{1,8}(\.\d{1,2})?$/',
-                'duracion' => 'required|integer',
-                'fecha_inicio' => 'required|date_format:Y-m-d',
-                'destino' => 'required|string|max:255',
-            ]);
-
-            $tour->update($request->only(['nombreto', 'descripcion', 'precio', 'duracion', 'fecha_inicio', 'destino']));
-
-            return response()->json($tour);
-        } else {
+        if (!$tour) {
             return response()->json(['message' => 'Tour no encontrado'], 404);
+        }
+
+        $validator = Validator::make($request->all(), $this->validationRules());
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $tour->update($request->only([
+                'nombreto', 'descripcion', 'precio',
+                'duracion', 'fecha_inicio', 'destino'
+            ]));
+
+            return response()->json([
+                'message' => 'Tour actualizado exitosamente',
+                'data' => $tour
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar tour: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al actualizar el tour'], 500);
         }
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Elimina un tour existente.
      */
-// En el controlador
     public function destroy($id_tour)
     {
-        $id_tour = Tour::where('id_tour', $id_tour)->first();  // Corregido
+        $tour = Tour::where('id_tour', $id_tour)->first();
 
-        if ($id_tour) {
-            $id_tour->delete();
-            return response()->json(['message' => 'Tour eliminado exitosamente']);
-        } else {
+        if (!$tour) {
             return response()->json(['message' => 'Tour no encontrado'], 404);
         }
+
+        try {
+            $tour->delete();
+            return response()->json(['message' => 'Tour eliminado exitosamente'], 200);
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar tour: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al eliminar el tour'], 500);
+        }
+    }
+
+    /**
+     * Reglas de validación reutilizables.
+     */
+    private function validationRules()
+    {
+        return [
+            'nombreto' => 'required|string|max:255',
+            'descripcion' => 'required|string|max:255',
+            'precio' => 'required|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'duracion' => 'required|integer|min:1',
+            'fecha_inicio' => 'required|date_format:Y-m-d|after_or_equal:today',
+            'destino' => 'required|string|max:255',
+        ];
     }
 }

@@ -4,176 +4,127 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Usuario;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Response;
 
 class UserController extends Controller
 {
     /**
-     * Listar todos los usuarios.
+     * Muestra una lista de todos los usuarios.
      */
     public function index()
     {
-        return response()->json(Usuario::all());
+        $usuarios = Usuario::all();
+
+        if ($usuarios->isEmpty()) {
+            return response()->json(['message' => 'No hay usuarios registrados'], 204);
+        }
+
+        return response()->json($usuarios, 200);
     }
 
     /**
-     * Mostrar un usuario por ID.
+     * Muestra los detalles de un usuario específico.
      */
     public function show($id_user)
     {
-        $user = Usuario::find($id_user);
+        $user = Usuario::where('id_user', $id_user)->first();
 
-        if ($user) {
-            return response()->json($user);
+        if (!$user) {
+            return response()->json(['message' => 'Cliente no encontrado'], 404);
         }
 
-        return response()->json(['message' => 'Cliente no encontrado'], 404);
+        return response()->json($user, 200);
     }
 
     /**
-     * Crear un nuevo usuario.
+     * Almacena un nuevo usuario en la base de datos.
      */
     public function store(Request $request)
     {
-        $this->validateUser($request);
+        $validator = Validator::make($request->all(), $this->validationRules());
 
-        $user = Usuario::create($request->only(['name', 'lastname', 'telf', 'direccion']));
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
-        return response()->json($user, 201);
+        try {
+            $user = Usuario::create($request->only(['name', 'lastname', 'telf', 'direccion']));
+            return response()->json([
+                'message' => 'Usuario creado exitosamente',
+                'data' => $user
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Error al crear usuario: ' . $e->getMessage());
+            return response()->json(['message' => 'Error interno del servidor'], 500);
+        }
     }
 
     /**
-     * Actualizar información de un usuario.
+     * Actualiza los datos de un usuario existente.
      */
     public function update(Request $request, $id_user)
     {
-        $user = Usuario::find($id_user);
+        $user = Usuario::where('id_user', $id_user)->first();
 
         if (!$user) {
             return response()->json(['message' => 'Cliente no encontrado'], 404);
         }
 
-        $this->validateUser($request);
+        $validator = Validator::make($request->all(), $this->validationRules());
 
-        $user->update($request->only(['name', 'lastname', 'telf', 'direccion']));
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Datos inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
 
-        return response()->json($user);
+        try {
+            $user->update($request->only(['name', 'lastname', 'telf', 'direccion']));
+            return response()->json([
+                'message' => 'Usuario actualizado exitosamente',
+                'data' => $user
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al actualizar usuario: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al actualizar el usuario'], 500);
+        }
     }
 
     /**
-     * Eliminar un usuario.
+     * Elimina un usuario existente.
      */
     public function destroy($id_user)
     {
-        $user = Usuario::find($id_user);
+        $user = Usuario::where('id_user', $id_user)->first();
 
         if (!$user) {
             return response()->json(['message' => 'Cliente no encontrado'], 404);
         }
 
-        $user->delete();
-
-        return response()->json(['message' => 'Cliente eliminado exitosamente']);
-    }
-
-    /**
-     * Buscar usuarios por nombre o apellido.
-     */
-    public function search(Request $request)
-    {
-        $query = $request->query('q');
-
-        if (!$query) {
-            return response()->json(['message' => 'Debe enviar un término de búsqueda'], 400);
+        try {
+            $user->delete();
+            return response()->json(['message' => 'Cliente eliminado exitosamente']);
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar usuario: ' . $e->getMessage());
+            return response()->json(['message' => 'Error al eliminar el usuario'], 500);
         }
-
-        $users = Usuario::where('name', 'LIKE', "%$query%")
-                    ->orWhere('lastname', 'LIKE', "%$query%")
-                    ->get();
-
-        return response()->json($users);
     }
 
     /**
-     * Filtrar usuarios por número de teléfono exacto.
+     * Reglas de validación reutilizables.
      */
-    public function filterByPhone(Request $request)
+    private function validationRules()
     {
-        $phone = $request->query('telf');
-
-        if (!$phone) {
-            return response()->json(['message' => 'Número telefónico requerido'], 400);
-        }
-
-        $users = Usuario::where('telf', $phone)->get();
-
-        return response()->json($users);
-    }
-
-    /**
-     * Activar o desactivar un usuario.
-     */
-    public function toggleStatus($id_user)
-    {
-        $user = Usuario::find($id_user);
-
-        if (!$user) {
-            return response()->json(['message' => 'Cliente no encontrado'], 404);
-        }
-
-        $user->active = !$user->active;
-        $user->save();
-
-        return response()->json(['message' => $user->active ? 'Usuario activado' : 'Usuario desactivado']);
-    }
-
-    /**
-     * Exportar todos los usuarios (JSON o CSV).
-     */
-    public function export(Request $request)
-    {
-        $format = $request->query('format', 'json');
-        $usuarios = Usuario::all();
-
-        if ($format === 'csv') {
-            $headers = [
-                'Content-Type' => 'text/csv',
-                'Content-Disposition' => 'attachment; filename=usuarios.csv',
-            ];
-
-            $callback = function () use ($usuarios) {
-                $handle = fopen('php://output', 'w');
-                fputcsv($handle, ['ID', 'Nombre', 'Apellido', 'Teléfono', 'Dirección', 'Activo']);
-                foreach ($usuarios as $usuario) {
-                    fputcsv($handle, [
-                        $usuario->id_user,
-                        $usuario->name,
-                        $usuario->lastname,
-                        $usuario->telf,
-                        $usuario->direccion,
-                        $usuario->active ? 'Sí' : 'No'
-                    ]);
-                }
-                fclose($handle);
-            };
-
-            return Response::stream($callback, 200, $headers);
-        }
-
-        return response()->json($usuarios);
-    }
-
-    /**
-     * Validación centralizada para usuarios.
-     */
-    private function validateUser(Request $request)
-    {
-        $request->validate([
+        return [
             'name' => 'required|string|max:255',
             'lastname' => 'required|string|max:255',
-            'telf' => 'required|string|max:255',
+            'telf' => 'required|string|max:20',
             'direccion' => 'required|string|max:255',
-        ]);
+        ];
     }
 }
