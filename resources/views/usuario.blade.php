@@ -78,7 +78,7 @@
         }
 
         .action-btns button {
-            background-color: #e74c3c;
+            background-color: #e67e22;
             color: white;
             padding: 6px 12px;
             border: none;
@@ -88,7 +88,7 @@
         }
 
         .action-btns button:hover {
-            background-color: #c0392b;
+            opacity: 0.8;
         }
 
         .no-tours {
@@ -131,6 +131,61 @@
             font-weight: bold;
             margin-top: 15px;
         }
+
+        /* MODAL */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 400px;
+            max-width: 90%;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-content input,
+        .modal-content textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .modal-buttons button {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .modal-buttons button:first-child {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .modal-buttons button:last-child {
+            background-color: #e74c3c;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -140,24 +195,38 @@
         <button class="add-btn">➕ Agregar Tour</button>
     </div>
 
-    <!-- Barra de búsqueda -->
     <div class="search-bar">
         <input type="text" id="search-input" placeholder="🔍 Buscar por nombre o destino..." oninput="filterTours()">
     </div>
 
-    <!-- Mensaje temporal -->
     <div id="message" class="message"></div>
-
-    <!-- Contador -->
     <p class="tour-count" id="tour-count"></p>
-
-    <!-- Tabla de tours -->
     <div id="tour-list"></div>
 
-    <!-- Paginación (simulada) -->
     <div class="pagination">
         <button onclick="prevPage()">⏮ Anterior</button>
         <button onclick="nextPage()">Siguiente ⏭</button>
+    </div>
+
+    <!-- MODAL -->
+    <div id="tour-modal" style="display: none;" class="modal">
+        <div class="modal-content">
+            <h2 id="modal-title">Agregar Tour</h2>
+            <form id="tour-form">
+                <input type="hidden" id="tour-id">
+                <input type="text" id="nombreto" placeholder="Nombre del Tour" required>
+                <textarea id="descripcion" placeholder="Descripción" required></textarea>
+                <input type="number" id="precio" placeholder="Precio" required>
+                <input type="number" id="duracion" placeholder="Duración (días)" required>
+                <input type="date" id="fecha_inicio" required>
+                <input type="text" id="destino" placeholder="Destino" required>
+                <input type="text" id="categoria" placeholder="Categoría (opcional)">
+                <div class="modal-buttons">
+                    <button type="submit">💾 Guardar</button>
+                    <button type="button" onclick="closeModal()">❌ Cancelar</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script>
@@ -217,6 +286,7 @@
                         <td>${tour.categoria || 'General'}</td>
                         <td class="action-btns">
                             <button onclick="deleteTour(${tour.id_tour})">🗑 Eliminar</button>
+                            <button onclick='openModal(${JSON.stringify(tour)})'>✏️ Editar</button>
                         </td>
                     </tr>
                 `;
@@ -287,6 +357,69 @@
                 filterTours();
             }
         }
+
+        document.querySelector('.add-btn').addEventListener('click', () => {
+            openModal();
+        });
+
+        function openModal(tour = null) {
+            document.getElementById('tour-form').reset();
+            document.getElementById('tour-id').value = tour?.id_tour || '';
+            document.getElementById('modal-title').textContent = tour ? 'Editar Tour' : 'Agregar Tour';
+            if (tour) {
+                document.getElementById('nombreto').value = tour.nombreto;
+                document.getElementById('descripcion').value = tour.descripcion;
+                document.getElementById('precio').value = tour.precio;
+                document.getElementById('duracion').value = tour.duracion;
+                document.getElementById('fecha_inicio').value = tour.fecha_inicio;
+                document.getElementById('destino').value = tour.destino;
+                document.getElementById('categoria').value = tour.categoria || '';
+            }
+            document.getElementById('tour-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('tour-modal').style.display = 'none';
+        }
+
+        document.getElementById('tour-form').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const id = document.getElementById('tour-id').value;
+            const data = {
+                nombreto: document.getElementById('nombreto').value,
+                descripcion: document.getElementById('descripcion').value,
+                precio: parseFloat(document.getElementById('precio').value),
+                duracion: parseInt(document.getElementById('duracion').value),
+                fecha_inicio: document.getElementById('fecha_inicio').value,
+                destino: document.getElementById('destino').value,
+                categoria: document.getElementById('categoria').value
+            };
+
+            try {
+                const url = id ? `${apiUrl}/${id}` : apiUrl;
+                const method = id ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(result.message || (id ? 'Tour actualizado' : 'Tour agregado'));
+                    closeModal();
+                    fetchTours();
+                } else {
+                    alert(result.message || 'Error en el formulario');
+                }
+            } catch (error) {
+                console.error('Error al guardar:', error);
+                alert('No se pudo guardar el tour.');
+            }
+        });
 
         window.onload = fetchTours;
     </script>
